@@ -11,10 +11,19 @@ namespace KeyboardOverlay
 {
     internal sealed class OverlaySettings
     {
+        public static readonly string[] ClassicKeys = new string[] {
+            "esc", "1", "2", "3", "4", "5", "tab", "q", "w", "e", "r", "t", "caps",
+            "a", "s", "d", "f", "g", "shift", "z", "x", "c", "v", "b", "ctrl", "grave", "space"
+        };
+        public static readonly string[] WasdKeys = new string[] { "w", "a", "s", "d", "q", "e", "shift", "ctrl", "space" };
+        public static readonly string[] ArrowKeys = new string[] { "up", "left", "down", "right", "shift", "ctrl", "space" };
         public Color OutlineColor = Color.FromArgb(247, 247, 247);
         public Color PressedColor = Color.FromArgb(0, 210, 235);
         public int OpacityPercent = 100;
         public int ScalePercent = 100;
+        public string Layout = "Classic";
+        public bool ShowMouse = true;
+        public HashSet<string> VisibleKeys = new HashSet<string>(ClassicKeys, StringComparer.OrdinalIgnoreCase);
 
         public static OverlaySettings Load()
         {
@@ -32,6 +41,13 @@ namespace KeyboardOverlay
                     else if (pair[0] == "pressed") value.PressedColor = ColorTranslator.FromHtml(pair[1]);
                     else if (pair[0] == "opacity" && int.TryParse(pair[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed)) value.OpacityPercent = Clamp(parsed, 35, 100);
                     else if (pair[0] == "scale" && int.TryParse(pair[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed)) value.ScalePercent = Clamp(parsed, 70, 150);
+                    else if (pair[0] == "layout" && (pair[1] == "Classic" || pair[1] == "WASD" || pair[1] == "Arrows")) value.Layout = pair[1];
+                    else if (pair[0] == "mouse") value.ShowMouse = pair[1] != "false";
+                    else if (pair[0] == "keys")
+                    {
+                        value.VisibleKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                        foreach (string key in pair[1].Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries)) value.VisibleKeys.Add(key);
+                    }
                 }
             }
             catch { return new OverlaySettings(); }
@@ -46,7 +62,10 @@ namespace KeyboardOverlay
                 "outline=" + ColorTranslator.ToHtml(OutlineColor),
                 "pressed=" + ColorTranslator.ToHtml(PressedColor),
                 "opacity=" + OpacityPercent.ToString(CultureInfo.InvariantCulture),
-                "scale=" + ScalePercent.ToString(CultureInfo.InvariantCulture)
+                "scale=" + ScalePercent.ToString(CultureInfo.InvariantCulture),
+                "layout=" + Layout,
+                "mouse=" + (ShowMouse ? "true" : "false"),
+                "keys=" + String.Join(",", VisibleKeys)
             });
         }
 
@@ -204,7 +223,8 @@ namespace KeyboardOverlay
 
         private Size OverlaySize()
         {
-            return new Size(348 * preferences.ScalePercent / 100, 180 * preferences.ScalePercent / 100);
+            int width = preferences.ShowMouse ? 348 : 240;
+            return new Size(width * preferences.ScalePercent / 100, 180 * preferences.ScalePercent / 100);
         }
 
         private void OpenSettings()
@@ -302,40 +322,72 @@ namespace KeyboardOverlay
             g.SmoothingMode = SmoothingMode.None;
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.SingleBitPerPixelGridFit;
 
-            DrawKey(g, "Esc", 10, 10, 27, 27, IsDown(Keys.Escape), 8F);
-            DrawKey(g, "1", 41, 10, 27, 27, IsDown(Keys.D1), 9F);
-            DrawKey(g, "2", 72, 10, 27, 27, IsDown(Keys.D2), 9F);
-            DrawKey(g, "3", 103, 10, 27, 27, IsDown(Keys.D3), 9F);
-            DrawKey(g, "4", 134, 10, 27, 27, IsDown(Keys.D4), 9F);
-            DrawKey(g, "5", 165, 10, 27, 27, IsDown(Keys.D5), 9F);
+            if (preferences.Layout == "WASD") DrawWasdLayout(g);
+            else if (preferences.Layout == "Arrows") DrawArrowLayout(g);
+            else DrawClassicLayout(g);
 
-            DrawKey(g, "Tab", 10, 42, 42, 27, IsDown(Keys.Tab), 8F);
-            DrawKey(g, "Q", 56, 42, 27, 27, IsDown(Keys.Q), 9F);
-            DrawKey(g, "W", 87, 42, 27, 27, IsDown(Keys.W), 9F);
-            DrawKey(g, "E", 118, 42, 27, 27, IsDown(Keys.E), 9F);
-            DrawKey(g, "R", 149, 42, 27, 27, IsDown(Keys.R), 9F);
-            DrawKey(g, "T", 180, 42, 27, 27, IsDown(Keys.T), 9F);
-
-            DrawKey(g, "Caps", 10, 74, 50, 27, IsDown(Keys.CapsLock), 7F);
-            DrawKey(g, "A", 64, 74, 27, 27, IsDown(Keys.A), 9F);
-            DrawKey(g, "S", 95, 74, 27, 27, IsDown(Keys.S), 9F);
-            DrawKey(g, "D", 126, 74, 27, 27, IsDown(Keys.D), 9F);
-            DrawKey(g, "F", 157, 74, 27, 27, IsDown(Keys.F), 9F);
-            DrawKey(g, "G", 188, 74, 27, 27, IsDown(Keys.G), 9F);
-
-            DrawKey(g, "Shift", 10, 106, 64, 27, ShiftDown(), 7F);
-            DrawKey(g, "Z", 78, 106, 27, 27, IsDown(Keys.Z), 9F);
-            DrawKey(g, "X", 109, 106, 27, 27, IsDown(Keys.X), 9F);
-            DrawKey(g, "C", 140, 106, 27, 27, IsDown(Keys.C), 9F);
-            DrawKey(g, "V", 171, 106, 27, 27, IsDown(Keys.V), 9F);
-            DrawKey(g, "B", 202, 106, 27, 27, IsDown(Keys.B), 9F);
-
-            DrawKey(g, "Ctrl", 10, 138, 52, 27, CtrlDown(), 7F);
-            DrawKey(g, "`", 66, 138, 34, 27, IsDown(Keys.Oemtilde), 9F);
-            DrawKey(g, "Space", 104, 138, 125, 27, IsDown(Keys.Space), 8F);
-
-            DrawMouse(g);
+            if (preferences.ShowMouse) DrawMouse(g);
             if (hookError) DrawHookError(g);
+        }
+
+        private void DrawClassicLayout(Graphics g)
+        {
+            DrawOptionalKey(g, "esc", "Esc", 10, 10, 27, 27, IsDown(Keys.Escape), 8F);
+            DrawOptionalKey(g, "1", "1", 41, 10, 27, 27, IsDown(Keys.D1), 9F);
+            DrawOptionalKey(g, "2", "2", 72, 10, 27, 27, IsDown(Keys.D2), 9F);
+            DrawOptionalKey(g, "3", "3", 103, 10, 27, 27, IsDown(Keys.D3), 9F);
+            DrawOptionalKey(g, "4", "4", 134, 10, 27, 27, IsDown(Keys.D4), 9F);
+            DrawOptionalKey(g, "5", "5", 165, 10, 27, 27, IsDown(Keys.D5), 9F);
+            DrawOptionalKey(g, "tab", "Tab", 10, 42, 42, 27, IsDown(Keys.Tab), 8F);
+            DrawOptionalKey(g, "q", "Q", 56, 42, 27, 27, IsDown(Keys.Q), 9F);
+            DrawOptionalKey(g, "w", "W", 87, 42, 27, 27, IsDown(Keys.W), 9F);
+            DrawOptionalKey(g, "e", "E", 118, 42, 27, 27, IsDown(Keys.E), 9F);
+            DrawOptionalKey(g, "r", "R", 149, 42, 27, 27, IsDown(Keys.R), 9F);
+            DrawOptionalKey(g, "t", "T", 180, 42, 27, 27, IsDown(Keys.T), 9F);
+            DrawOptionalKey(g, "caps", "Caps", 10, 74, 50, 27, IsDown(Keys.CapsLock), 7F);
+            DrawOptionalKey(g, "a", "A", 64, 74, 27, 27, IsDown(Keys.A), 9F);
+            DrawOptionalKey(g, "s", "S", 95, 74, 27, 27, IsDown(Keys.S), 9F);
+            DrawOptionalKey(g, "d", "D", 126, 74, 27, 27, IsDown(Keys.D), 9F);
+            DrawOptionalKey(g, "f", "F", 157, 74, 27, 27, IsDown(Keys.F), 9F);
+            DrawOptionalKey(g, "g", "G", 188, 74, 27, 27, IsDown(Keys.G), 9F);
+            DrawOptionalKey(g, "shift", "Shift", 10, 106, 64, 27, ShiftDown(), 7F);
+            DrawOptionalKey(g, "z", "Z", 78, 106, 27, 27, IsDown(Keys.Z), 9F);
+            DrawOptionalKey(g, "x", "X", 109, 106, 27, 27, IsDown(Keys.X), 9F);
+            DrawOptionalKey(g, "c", "C", 140, 106, 27, 27, IsDown(Keys.C), 9F);
+            DrawOptionalKey(g, "v", "V", 171, 106, 27, 27, IsDown(Keys.V), 9F);
+            DrawOptionalKey(g, "b", "B", 202, 106, 27, 27, IsDown(Keys.B), 9F);
+            DrawOptionalKey(g, "ctrl", "Ctrl", 10, 138, 52, 27, CtrlDown(), 7F);
+            DrawOptionalKey(g, "grave", "`", 66, 138, 34, 27, IsDown(Keys.Oemtilde), 9F);
+            DrawOptionalKey(g, "space", "Space", 104, 138, 125, 27, IsDown(Keys.Space), 8F);
+        }
+
+        private void DrawWasdLayout(Graphics g)
+        {
+            DrawOptionalKey(g, "w", "W", 73, 10, 42, 34, IsDown(Keys.W), 12F);
+            DrawOptionalKey(g, "q", "Q", 27, 48, 42, 34, IsDown(Keys.Q), 12F);
+            DrawOptionalKey(g, "a", "A", 73, 48, 42, 34, IsDown(Keys.A), 12F);
+            DrawOptionalKey(g, "s", "S", 73, 86, 42, 34, IsDown(Keys.S), 12F);
+            DrawOptionalKey(g, "d", "D", 119, 48, 42, 34, IsDown(Keys.D), 12F);
+            DrawOptionalKey(g, "e", "E", 165, 48, 42, 34, IsDown(Keys.E), 12F);
+            DrawOptionalKey(g, "shift", "Shift", 27, 124, 58, 34, ShiftDown(), 8F);
+            DrawOptionalKey(g, "ctrl", "Ctrl", 89, 124, 52, 34, CtrlDown(), 8F);
+            DrawOptionalKey(g, "space", "Space", 145, 124, 92, 34, IsDown(Keys.Space), 8F);
+        }
+
+        private void DrawArrowLayout(Graphics g)
+        {
+            DrawOptionalKey(g, "up", "↑", 91, 24, 42, 34, IsDown(Keys.Up), 15F);
+            DrawOptionalKey(g, "left", "←", 45, 62, 42, 34, IsDown(Keys.Left), 15F);
+            DrawOptionalKey(g, "down", "↓", 91, 62, 42, 34, IsDown(Keys.Down), 15F);
+            DrawOptionalKey(g, "right", "→", 137, 62, 42, 34, IsDown(Keys.Right), 15F);
+            DrawOptionalKey(g, "shift", "Shift", 27, 112, 58, 34, ShiftDown(), 8F);
+            DrawOptionalKey(g, "ctrl", "Ctrl", 89, 112, 52, 34, CtrlDown(), 8F);
+            DrawOptionalKey(g, "space", "Space", 145, 112, 92, 34, IsDown(Keys.Space), 8F);
+        }
+
+        private void DrawOptionalKey(Graphics g, string id, string label, int x, int y, int width, int height, bool pressed, float fontSize)
+        {
+            if (preferences.VisibleKeys.Contains(id)) DrawKey(g, label, x, y, width, height, pressed, fontSize);
         }
 
         private void DrawKey(Graphics g, string label, int x, int y, int width, int height, bool pressed, float fontSize)
@@ -414,6 +466,20 @@ namespace KeyboardOverlay
         }
     }
 
+    internal sealed class KeyChoice
+    {
+        public string Id { get; private set; }
+        private readonly string label;
+
+        public KeyChoice(string id, string name)
+        {
+            Id = id;
+            label = name;
+        }
+
+        public override string ToString() { return label; }
+    }
+
     internal sealed class SettingsDialog : Form
     {
         private readonly Color surface = Color.FromArgb(20, 23, 29);
@@ -423,6 +489,10 @@ namespace KeyboardOverlay
         private Color pressedColor;
         private readonly TrackBar opacityTrack = new TrackBar();
         private readonly TrackBar scaleTrack = new TrackBar();
+        private readonly ComboBox layoutPicker = new ComboBox();
+        private readonly CheckedListBox keyPicker = new CheckedListBox();
+        private readonly CheckBox mouseToggle = new CheckBox();
+        private bool suppressLayoutChange;
         private readonly Label opacityValue = new Label();
         private readonly Label scaleValue = new Label();
         private readonly Button outlineButton = new Button();
@@ -441,60 +511,86 @@ namespace KeyboardOverlay
             TopMost = true;
             MinimizeBox = false;
             MaximizeBox = false;
-            ClientSize = new Size(430, 388);
+            ClientSize = new Size(430, 664);
             BackColor = surface;
             ForeColor = textColor;
             Font = new Font("Segoe UI", 9F, FontStyle.Regular);
             Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
 
             Controls.Add(MakeLabel("Keyboard Overlay", 24, 18, 360, 30, 17F, true, textColor));
-            Controls.Add(MakeLabel("Tune its look. Settings stay on this PC.", 24, 51, 380, 22, 9F, false, muted));
+            Controls.Add(MakeLabel("Choose a layout, then pick exactly what it shows.", 24, 51, 380, 22, 9F, false, muted));
             Controls.Add(MakeRule(84));
 
-            Controls.Add(MakeLabel("Key outline", 24, 103, 220, 24, 10F, false, textColor));
-            ConfigureColorButton(outlineButton, 318, 98, outlineColor);
+            Controls.Add(MakeLabel("Layout", 24, 95, 90, 24, 10F, false, textColor));
+            layoutPicker.DropDownStyle = ComboBoxStyle.DropDownList;
+            layoutPicker.Items.AddRange(new object[] { "Classic", "WASD focus", "Arrow keys" });
+            layoutPicker.SetBounds(125, 91, 280, 28);
+            layoutPicker.SelectedIndex = current.Layout == "WASD" ? 1 : (current.Layout == "Arrows" ? 2 : 0);
+            Controls.Add(layoutPicker);
+            Controls.Add(MakeLabel("Visible keys", 24, 130, 180, 22, 10F, false, textColor));
+            keyPicker.CheckOnClick = true;
+            keyPicker.MultiColumn = true;
+            keyPicker.ColumnWidth = 165;
+            keyPicker.BorderStyle = BorderStyle.FixedSingle;
+            keyPicker.BackColor = Color.FromArgb(27, 31, 39);
+            keyPicker.ForeColor = textColor;
+            keyPicker.SetBounds(24, 153, 382, 190);
+            Controls.Add(keyPicker);
+            mouseToggle.Text = "Show mouse buttons";
+            mouseToggle.Checked = current.ShowMouse;
+            mouseToggle.SetBounds(24, 350, 250, 24);
+            mouseToggle.ForeColor = textColor;
+            Controls.Add(mouseToggle);
+            layoutPicker.SelectedIndexChanged += delegate { if (!suppressLayoutChange) ApplyLayoutPreset(); };
+            PopulateKeys(current.VisibleKeys);
+            Controls.Add(MakeRule(382));
+
+            Controls.Add(MakeLabel("Key outline", 24, 398, 220, 24, 10F, false, textColor));
+            ConfigureColorButton(outlineButton, 318, 393, outlineColor);
             outlineButton.Click += delegate { PickColor(true); };
             Controls.Add(outlineButton);
 
-            Controls.Add(MakeLabel("Pressed key", 24, 148, 220, 24, 10F, false, textColor));
-            ConfigureColorButton(pressedButton, 318, 143, pressedColor);
+            Controls.Add(MakeLabel("Pressed key", 24, 443, 220, 24, 10F, false, textColor));
+            ConfigureColorButton(pressedButton, 318, 438, pressedColor);
             pressedButton.Click += delegate { PickColor(false); };
             Controls.Add(pressedButton);
-            Controls.Add(MakeRule(187));
+            Controls.Add(MakeRule(480));
 
-            Controls.Add(MakeLabel("Overlay opacity", 24, 201, 260, 22, 10F, false, textColor));
-            ConfigureValueLabel(opacityValue, 345, 201);
+            Controls.Add(MakeLabel("Overlay opacity", 24, 491, 260, 22, 10F, false, textColor));
+            ConfigureValueLabel(opacityValue, 345, 491);
             opacityTrack.Minimum = 35;
             opacityTrack.Maximum = 100;
             opacityTrack.TickFrequency = 13;
             opacityTrack.SmallChange = 1;
             opacityTrack.LargeChange = 5;
             opacityTrack.Value = current.OpacityPercent;
-            opacityTrack.SetBounds(17, 220, 395, 34);
+            opacityTrack.SetBounds(17, 510, 395, 34);
             opacityTrack.Scroll += delegate { opacityValue.Text = opacityTrack.Value.ToString() + "%"; };
             opacityTrack.ValueChanged += delegate { opacityValue.Text = opacityTrack.Value.ToString() + "%"; };
             Controls.Add(opacityTrack);
 
-            Controls.Add(MakeLabel("Overlay size", 24, 264, 260, 22, 10F, false, textColor));
-            ConfigureValueLabel(scaleValue, 345, 264);
+            Controls.Add(MakeLabel("Overlay size", 24, 554, 260, 22, 10F, false, textColor));
+            ConfigureValueLabel(scaleValue, 345, 554);
             scaleTrack.Minimum = 70;
             scaleTrack.Maximum = 150;
             scaleTrack.TickFrequency = 10;
             scaleTrack.SmallChange = 5;
             scaleTrack.LargeChange = 10;
             scaleTrack.Value = current.ScalePercent;
-            scaleTrack.SetBounds(17, 283, 395, 34);
+            scaleTrack.SetBounds(17, 573, 395, 34);
             scaleTrack.Scroll += delegate { scaleValue.Text = scaleTrack.Value.ToString() + "%"; };
             scaleTrack.ValueChanged += delegate { scaleValue.Text = scaleTrack.Value.ToString() + "%"; };
             Controls.Add(scaleTrack);
 
-            Button defaults = MakeButton("Defaults", 24, 338, 94, false);
+            scaleTrack.SetBounds(17, 558, 395, 34);
+            Controls.Add(MakeRule(612));
+            Button defaults = MakeButton("Defaults", 24, 620, 94, false);
             defaults.Click += delegate { ResetDefaults(); };
             Controls.Add(defaults);
-            Button cancel = MakeButton("Cancel", 230, 338, 80, false);
+            Button cancel = MakeButton("Cancel", 230, 620, 80, false);
             cancel.DialogResult = DialogResult.Cancel;
             Controls.Add(cancel);
-            Button save = MakeButton("Save", 320, 338, 86, true);
+            Button save = MakeButton("Save", 320, 620, 86, true);
             save.Click += delegate
             {
                 Result = new OverlaySettings();
@@ -502,6 +598,10 @@ namespace KeyboardOverlay
                 Result.PressedColor = pressedColor;
                 Result.OpacityPercent = opacityTrack.Value;
                 Result.ScalePercent = scaleTrack.Value;
+                Result.Layout = layoutPicker.SelectedIndex == 1 ? "WASD" : (layoutPicker.SelectedIndex == 2 ? "Arrows" : "Classic");
+                Result.ShowMouse = mouseToggle.Checked;
+                Result.VisibleKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (object checkedKey in keyPicker.CheckedItems) Result.VisibleKeys.Add(((KeyChoice)checkedKey).Id);
                 DialogResult = DialogResult.OK;
                 Close();
             };
@@ -510,6 +610,30 @@ namespace KeyboardOverlay
             CancelButton = cancel;
             opacityValue.Text = opacityTrack.Value.ToString() + "%";
             scaleValue.Text = scaleTrack.Value.ToString() + "%";
+        }
+
+        private string[] KeysForSelectedLayout()
+        {
+            if (layoutPicker.SelectedIndex == 1) return OverlaySettings.WasdKeys;
+            if (layoutPicker.SelectedIndex == 2) return OverlaySettings.ArrowKeys;
+            return OverlaySettings.ClassicKeys;
+        }
+
+        private void PopulateKeys(HashSet<string> selected)
+        {
+            keyPicker.Items.Clear();
+            foreach (string id in KeysForSelectedLayout())
+            {
+                KeyChoice choice = new KeyChoice(id, id == "grave" ? "`" : id.ToUpperInvariant());
+                int index = keyPicker.Items.Add(choice);
+                keyPicker.SetItemChecked(index, selected.Contains(id));
+            }
+        }
+
+        private void ApplyLayoutPreset()
+        {
+            string[] keys = KeysForSelectedLayout();
+            PopulateKeys(new HashSet<string>(keys, StringComparer.OrdinalIgnoreCase));
         }
 
         private Label MakeLabel(string caption, int x, int y, int width, int height, float size, bool bold, Color color)
@@ -597,6 +721,11 @@ namespace KeyboardOverlay
 
         private void ResetDefaults()
         {
+            suppressLayoutChange = true;
+            layoutPicker.SelectedIndex = 0;
+            suppressLayoutChange = false;
+            PopulateKeys(new HashSet<string>(OverlaySettings.ClassicKeys, StringComparer.OrdinalIgnoreCase));
+            mouseToggle.Checked = true;
             outlineColor = Color.FromArgb(247, 247, 247);
             pressedColor = Color.FromArgb(0, 210, 235);
             SetColorButton(outlineButton, outlineColor);

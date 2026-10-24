@@ -12,8 +12,9 @@ Download **[KeyboardOverlay.exe from the latest release](https://github.com/Isma
 
 - Live keyboard display for movement and common game keys: Esc, 1–5, Tab, QWERT, Caps, ASDFG, Shift, ZXCVB, Ctrl, backtick, and Space.
 - Mouse display for left, right, and middle click, scroll wheel, and side buttons.
+- Three key layouts: classic keyboard, WASD focus, and arrow-key focus. Choose individual keys in each layout and hide the mouse display when you do not need it.
 - Transparent, click-through, always-on-top overlay that stays in the bottom-left corner.
-- Custom outline and pressed-key colors, adjustable opacity, and size.
+- Custom outline and pressed-key colors, adjustable opacity, and size, all available from the tray Settings menu.
 - Settings saved locally in `%AppData%\KeyboardOverlay\settings.ini`.
 - Smiley app icon, taskbar button, and notification-area menu.
 - Event-driven updates; it does not poll for input or capture/encode recordings.
