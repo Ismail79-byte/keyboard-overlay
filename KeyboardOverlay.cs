@@ -482,9 +482,6 @@ namespace KeyboardOverlay
 
     internal sealed class SettingsDialog : Form
     {
-        private readonly Color surface = Color.FromArgb(20, 23, 29);
-        private readonly Color textColor = Color.FromArgb(239, 242, 247);
-        private readonly Color muted = Color.FromArgb(166, 175, 188);
         private Color outlineColor;
         private Color pressedColor;
         private readonly TrackBar opacityTrack = new TrackBar();
@@ -492,14 +489,15 @@ namespace KeyboardOverlay
         private readonly ComboBox layoutPicker = new ComboBox();
         private readonly CheckedListBox keyPicker = new CheckedListBox();
         private readonly CheckBox mouseToggle = new CheckBox();
-        private readonly TabControl pages = new TabControl();
-        private readonly TabPage layoutPage = new TabPage("Layout & keys");
-        private readonly TabPage appearancePage = new TabPage("Appearance");
+        private readonly ComboBox themePicker = new ComboBox();
         private bool suppressLayoutChange;
         private readonly Label opacityValue = new Label();
         private readonly Label scaleValue = new Label();
         private readonly Button outlineButton = new Button();
         private readonly Button pressedButton = new Button();
+        private readonly Panel outlineSwatch = new Panel();
+        private readonly Panel pressedSwatch = new Panel();
+        private bool suppressThemeChange;
 
         public OverlaySettings Result { get; private set; }
 
@@ -514,101 +512,108 @@ namespace KeyboardOverlay
             TopMost = true;
             MinimizeBox = false;
             MaximizeBox = false;
-            ClientSize = new Size(500, 548);
-            BackColor = surface;
-            ForeColor = textColor;
+            ClientSize = new Size(500, 646);
+            BackColor = SystemColors.Control;
+            ForeColor = SystemColors.ControlText;
             Font = new Font("Segoe UI", 9F, FontStyle.Regular);
             Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
 
-            Controls.Add(MakeLabel("Keyboard Overlay", 18, 14, 360, 28, 16F, true, textColor));
-            Controls.Add(MakeLabel("Personalize what appears in your recording.", 18, 43, 420, 20, 9F, false, muted));
-            pages.SetBounds(14, 72, 472, 406);
-            pages.Controls.Add(layoutPage);
-            pages.Controls.Add(appearancePage);
-            layoutPage.UseVisualStyleBackColor = false;
-            appearancePage.UseVisualStyleBackColor = false;
-            Controls.Add(pages);
+            Controls.Add(MakeLabel("Keyboard Overlay Settings", 16, 14, 450, 26, 14F, true));
+            Controls.Add(MakeLabel("Choose what viewers see. Changes apply when you click Save.", 17, 40, 460, 20, 9F, false));
 
-            layoutPage.BackColor = surface;
-            layoutPage.Controls.Add(MakeLabel("Choose a starting layout", 14, 12, 240, 22, 10F, true, textColor));
+            GroupBox layoutGroup = new GroupBox();
+            layoutGroup.Text = "Layout and keys";
+            layoutGroup.SetBounds(14, 68, 472, 300);
+            Controls.Add(layoutGroup);
+            layoutGroup.Controls.Add(MakeLabel("Layout", 14, 25, 70, 22, 9F, false));
             layoutPicker.DropDownStyle = ComboBoxStyle.DropDownList;
             layoutPicker.Items.AddRange(new object[] { "Classic", "WASD focus", "Arrow keys" });
-            layoutPicker.SetBounds(14, 37, 420, 29);
+            layoutPicker.SetBounds(90, 21, 360, 27);
             layoutPicker.SelectedIndex = current.Layout == "WASD" ? 1 : (current.Layout == "Arrows" ? 2 : 0);
-            layoutPage.Controls.Add(layoutPicker);
-            layoutPage.Controls.Add(MakeLabel("Keys to show", 14, 78, 200, 22, 10F, true, textColor));
+            layoutGroup.Controls.Add(layoutPicker);
+            layoutGroup.Controls.Add(MakeLabel("Check the keys to display", 14, 58, 300, 21, 9F, true));
             keyPicker.CheckOnClick = true;
             keyPicker.MultiColumn = true;
-            keyPicker.ColumnWidth = 205;
-            keyPicker.BorderStyle = BorderStyle.FixedSingle;
-            keyPicker.BackColor = Color.FromArgb(27, 31, 39);
-            keyPicker.ForeColor = textColor;
-            keyPicker.SetBounds(14, 103, 420, 190);
-            layoutPage.Controls.Add(keyPicker);
-            Button selectAll = MakeButton("Select all", 14, 302, 100, false);
+            keyPicker.ColumnWidth = 145;
+            keyPicker.SetBounds(14, 81, 436, 158);
+            layoutGroup.Controls.Add(keyPicker);
+            Button selectAll = MakeButton("Select all", 14, 246, 95);
             selectAll.Click += delegate { for (int i = 0; i < keyPicker.Items.Count; i++) keyPicker.SetItemChecked(i, true); };
-            layoutPage.Controls.Add(selectAll);
-            Button clearKeys = MakeButton("Clear", 122, 302, 80, false);
+            layoutGroup.Controls.Add(selectAll);
+            Button clearKeys = MakeButton("Clear selection", 117, 246, 112);
             clearKeys.Click += delegate { for (int i = 0; i < keyPicker.Items.Count; i++) keyPicker.SetItemChecked(i, false); };
-            layoutPage.Controls.Add(clearKeys);
-            mouseToggle.Text = "Show mouse buttons";
+            layoutGroup.Controls.Add(clearKeys);
+            mouseToggle.Text = "Show mouse buttons and scroll wheel";
             mouseToggle.Checked = current.ShowMouse;
-            mouseToggle.SetBounds(14, 348, 260, 25);
-            mouseToggle.ForeColor = textColor;
-            layoutPage.Controls.Add(mouseToggle);
+            mouseToggle.SetBounds(14, 282, 300, 24);
+            layoutGroup.Controls.Add(mouseToggle);
             layoutPicker.SelectedIndexChanged += delegate { if (!suppressLayoutChange) ApplyLayoutPreset(); };
             PopulateKeys(current.VisibleKeys);
 
-            appearancePage.BackColor = surface;
-            appearancePage.Controls.Add(MakeLabel("Choose a color theme", 14, 12, 220, 22, 10F, true, textColor));
-            appearancePage.Controls.Add(MakeLabel("Or customize either color below.", 14, 34, 400, 20, 9F, false, muted));
-            AddTheme("Ice", 14, 62, Color.FromArgb(247, 247, 247), Color.FromArgb(0, 210, 235));
-            AddTheme("Red", 224, 62, Color.White, Color.FromArgb(255, 82, 105));
-            AddTheme("Lime", 14, 105, Color.FromArgb(245, 255, 242), Color.FromArgb(124, 220, 90));
-            AddTheme("Violet", 224, 105, Color.FromArgb(248, 241, 255), Color.FromArgb(177, 126, 255));
-            appearancePage.Controls.Add(MakeLabel("Key outline", 14, 162, 140, 22, 9F, false, textColor));
-            ConfigureColorButton(outlineButton, 280, 155, outlineColor);
-            outlineButton.Text = "Choose color";
+            GroupBox colorGroup = new GroupBox();
+            colorGroup.Text = "Colors";
+            colorGroup.SetBounds(14, 376, 472, 124);
+            Controls.Add(colorGroup);
+            colorGroup.Controls.Add(MakeLabel("Color theme", 14, 24, 100, 22, 9F, false));
+            themePicker.DropDownStyle = ComboBoxStyle.DropDownList;
+            themePicker.Items.AddRange(new object[] { "Ice (cyan)", "Red", "Lime", "Violet", "Custom colors" });
+            themePicker.SetBounds(116, 20, 334, 27);
+            colorGroup.Controls.Add(themePicker);
+            colorGroup.Controls.Add(MakeLabel("Key outline", 14, 62, 100, 22, 9F, false));
+            outlineSwatch.BorderStyle = BorderStyle.FixedSingle;
+            outlineSwatch.SetBounds(118, 61, 30, 20);
+            colorGroup.Controls.Add(outlineSwatch);
+            outlineButton.Text = "Choose...";
+            outlineButton.SetBounds(154, 58, 92, 27);
             outlineButton.Click += delegate { PickColor(true); };
-            appearancePage.Controls.Add(outlineButton);
-            appearancePage.Controls.Add(MakeLabel("Pressed key", 14, 201, 140, 22, 9F, false, textColor));
-            ConfigureColorButton(pressedButton, 280, 194, pressedColor);
-            pressedButton.Text = "Choose color";
+            colorGroup.Controls.Add(outlineButton);
+            colorGroup.Controls.Add(MakeLabel("Pressed key", 260, 62, 82, 22, 9F, false));
+            pressedSwatch.BorderStyle = BorderStyle.FixedSingle;
+            pressedSwatch.SetBounds(348, 61, 30, 20);
+            colorGroup.Controls.Add(pressedSwatch);
+            pressedButton.Text = "Choose...";
+            pressedButton.SetBounds(384, 58, 68, 27);
             pressedButton.Click += delegate { PickColor(false); };
-            appearancePage.Controls.Add(pressedButton);
-            appearancePage.Controls.Add(MakeRule(235));
-            appearancePage.Controls.Add(MakeLabel("Opacity", 14, 248, 180, 22, 10F, true, textColor));
-            ConfigureValueLabel(opacityValue, 374, 248);
+            colorGroup.Controls.Add(pressedButton);
+            themePicker.SelectedIndex = FindTheme(outlineColor, pressedColor);
+            themePicker.SelectedIndexChanged += delegate { if (!suppressThemeChange) ApplyTheme(); };
+            UpdateColorSwatches();
+
+            GroupBox overlayGroup = new GroupBox();
+            overlayGroup.Text = "Overlay";
+            overlayGroup.SetBounds(14, 508, 472, 82);
+            Controls.Add(overlayGroup);
+            overlayGroup.Controls.Add(MakeLabel("Opacity", 14, 21, 65, 22, 9F, false));
+            ConfigureValueLabel(opacityValue, 390, 21);
             opacityTrack.Minimum = 35;
             opacityTrack.Maximum = 100;
-            opacityTrack.TickFrequency = 10;
+            opacityTrack.TickFrequency = 13;
             opacityTrack.SmallChange = 1;
             opacityTrack.LargeChange = 5;
             opacityTrack.Value = current.OpacityPercent;
-            opacityTrack.SetBounds(8, 267, 426, 42);
+            opacityTrack.SetBounds(80, 15, 322, 36);
             opacityTrack.ValueChanged += delegate { UpdateSliderLabels(); };
-            appearancePage.Controls.Add(opacityTrack);
-            appearancePage.Controls.Add(MakeLabel("Size", 14, 314, 180, 22, 10F, true, textColor));
-            ConfigureValueLabel(scaleValue, 374, 314);
+            overlayGroup.Controls.Add(opacityTrack);
+            overlayGroup.Controls.Add(MakeLabel("Size", 14, 52, 65, 22, 9F, false));
+            ConfigureValueLabel(scaleValue, 390, 52);
             scaleTrack.Minimum = 70;
             scaleTrack.Maximum = 150;
             scaleTrack.TickFrequency = 10;
             scaleTrack.SmallChange = 5;
             scaleTrack.LargeChange = 10;
             scaleTrack.Value = current.ScalePercent;
-            scaleTrack.SetBounds(8, 333, 426, 38);
+            scaleTrack.SetBounds(80, 46, 322, 36);
             scaleTrack.ValueChanged += delegate { UpdateSliderLabels(); };
-            appearancePage.Controls.Add(scaleTrack);
+            overlayGroup.Controls.Add(scaleTrack);
             UpdateSliderLabels();
 
-            Controls.Add(MakeRule(486));
-            Button defaults = MakeButton("Reset", 18, 500, 90, false);
+            Button defaults = MakeButton("Restore defaults", 14, 604, 130);
             defaults.Click += delegate { ResetDefaults(); };
             Controls.Add(defaults);
-            Button cancel = MakeButton("Cancel", 314, 500, 76, false);
+            Button cancel = MakeButton("Cancel", 324, 604, 74);
             cancel.DialogResult = DialogResult.Cancel;
             Controls.Add(cancel);
-            Button save = MakeButton("Save settings", 398, 500, 86, true);
+            Button save = MakeButton("Save", 406, 604, 80);
             save.Click += delegate
             {
                 Result = new OverlaySettings();
@@ -628,23 +633,29 @@ namespace KeyboardOverlay
             CancelButton = cancel;
         }
 
-        private void AddTheme(string name, int x, int y, Color outline, Color pressed)
+        private int FindTheme(Color outline, Color pressed)
         {
-            Button theme = MakeButton(name, x, y, 198, true);
-            theme.Height = 36;
-            theme.BackColor = pressed;
-            theme.FlatAppearance.BorderColor = outline;
-            theme.ForeColor = pressed.GetBrightness() > 0.56F ? Color.FromArgb(20, 23, 29) : Color.White;
-            theme.Click += delegate
-            {
-                outlineColor = outline;
-                pressedColor = pressed;
-                SetColorButton(outlineButton, outlineColor);
-                SetColorButton(pressedButton, pressedColor);
-                outlineButton.Text = "Choose color";
-                pressedButton.Text = "Choose color";
-            };
-            appearancePage.Controls.Add(theme);
+            if (outline.ToArgb() == Color.FromArgb(247, 247, 247).ToArgb() && pressed.ToArgb() == Color.FromArgb(0, 210, 235).ToArgb()) return 0;
+            if (outline.ToArgb() == Color.White.ToArgb() && pressed.ToArgb() == Color.FromArgb(255, 82, 105).ToArgb()) return 1;
+            if (outline.ToArgb() == Color.FromArgb(245, 255, 242).ToArgb() && pressed.ToArgb() == Color.FromArgb(124, 220, 90).ToArgb()) return 2;
+            if (outline.ToArgb() == Color.FromArgb(248, 241, 255).ToArgb() && pressed.ToArgb() == Color.FromArgb(177, 126, 255).ToArgb()) return 3;
+            return 4;
+        }
+
+        private void ApplyTheme()
+        {
+            if (themePicker.SelectedIndex == 0) { outlineColor = Color.FromArgb(247, 247, 247); pressedColor = Color.FromArgb(0, 210, 235); }
+            else if (themePicker.SelectedIndex == 1) { outlineColor = Color.White; pressedColor = Color.FromArgb(255, 82, 105); }
+            else if (themePicker.SelectedIndex == 2) { outlineColor = Color.FromArgb(245, 255, 242); pressedColor = Color.FromArgb(124, 220, 90); }
+            else if (themePicker.SelectedIndex == 3) { outlineColor = Color.FromArgb(248, 241, 255); pressedColor = Color.FromArgb(177, 126, 255); }
+            else return;
+            UpdateColorSwatches();
+        }
+
+        private void UpdateColorSwatches()
+        {
+            outlineSwatch.BackColor = outlineColor;
+            pressedSwatch.BackColor = pressedColor;
         }
 
         private void UpdateSliderLabels()
@@ -677,59 +688,27 @@ namespace KeyboardOverlay
             PopulateKeys(new HashSet<string>(keys, StringComparer.OrdinalIgnoreCase));
         }
 
-        private Label MakeLabel(string caption, int x, int y, int width, int height, float size, bool bold, Color color)
+        private Label MakeLabel(string caption, int x, int y, int width, int height, float size, bool bold)
         {
             Label label = new Label();
             label.Text = caption;
             label.SetBounds(x, y, width, height);
             label.Font = new Font("Segoe UI", size, bold ? FontStyle.Bold : FontStyle.Regular);
-            label.ForeColor = color;
             return label;
-        }
-
-        private Panel MakeRule(int y)
-        {
-            Panel rule = new Panel();
-            rule.BackColor = Color.FromArgb(55, 61, 72);
-            rule.SetBounds(24, y, 382, 1);
-            return rule;
         }
 
         private void ConfigureValueLabel(Label label, int x, int y)
         {
             label.SetBounds(x, y, 60, 22);
             label.TextAlign = ContentAlignment.MiddleRight;
-            label.ForeColor = Color.FromArgb(64, 220, 236);
         }
 
-        private void ConfigureColorButton(Button button, int x, int y, Color color)
-        {
-            button.SetBounds(x, y, 88, 30);
-            button.FlatStyle = FlatStyle.Flat;
-            button.FlatAppearance.BorderColor = Color.FromArgb(74, 83, 97);
-            button.FlatAppearance.MouseOverBackColor = Color.FromArgb(54, 61, 72);
-            button.Cursor = Cursors.Hand;
-            SetColorButton(button, color);
-        }
-
-        private void SetColorButton(Button button, Color color)
-        {
-            button.BackColor = color;
-            button.ForeColor = color.GetBrightness() > 0.56F ? Color.FromArgb(20, 23, 29) : Color.White;
-            button.Text = ColorTranslator.ToHtml(color).ToUpperInvariant();
-        }
-
-        private Button MakeButton(string caption, int x, int y, int width, bool primary)
+        private Button MakeButton(string caption, int x, int y, int width)
         {
             Button button = new Button();
             button.Text = caption;
-            button.SetBounds(x, y, width, 32);
-            button.FlatStyle = FlatStyle.Flat;
-            button.FlatAppearance.BorderColor = primary ? Color.FromArgb(0, 170, 196) : Color.FromArgb(74, 83, 97);
-            button.FlatAppearance.MouseOverBackColor = primary ? Color.FromArgb(0, 184, 209) : Color.FromArgb(42, 48, 58);
-            button.BackColor = primary ? Color.FromArgb(0, 157, 183) : Color.FromArgb(31, 36, 44);
-            button.ForeColor = Color.White;
-            button.Cursor = Cursors.Hand;
+            button.SetBounds(x, y, width, 28);
+            button.FlatStyle = FlatStyle.Standard;
             return button;
         }
 
@@ -750,13 +729,15 @@ namespace KeyboardOverlay
                 if (outline)
                 {
                     outlineColor = picker.Color;
-                    SetColorButton(outlineButton, outlineColor);
                 }
                 else
                 {
                     pressedColor = picker.Color;
-                    SetColorButton(pressedButton, pressedColor);
                 }
+                suppressThemeChange = true;
+                themePicker.SelectedIndex = 4;
+                suppressThemeChange = false;
+                UpdateColorSwatches();
             }
         }
 
@@ -769,12 +750,13 @@ namespace KeyboardOverlay
             mouseToggle.Checked = true;
             outlineColor = Color.FromArgb(247, 247, 247);
             pressedColor = Color.FromArgb(0, 210, 235);
-            SetColorButton(outlineButton, outlineColor);
-            SetColorButton(pressedButton, pressedColor);
+            suppressThemeChange = true;
+            themePicker.SelectedIndex = 0;
+            suppressThemeChange = false;
+            UpdateColorSwatches();
             opacityTrack.Value = 100;
             scaleTrack.Value = 100;
-            opacityValue.Text = "100%";
-            scaleValue.Text = "100%";
+            UpdateSliderLabels();
         }
     }
 }
