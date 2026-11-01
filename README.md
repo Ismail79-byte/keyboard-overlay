@@ -1,5 +1,7 @@
 # Keyboard Overlay
 
+<p align="center"><img src="assets/keyboard-overlay-logo.png" alt="Keyboard Overlay logo" width="144"></p>
+
 [![Build Windows app](https://github.com/Ismail79-byte/keyboard-overlay/actions/workflows/build.yml/badge.svg)](https://github.com/Ismail79-byte/keyboard-overlay/actions/workflows/build.yml)
 
 A small, transparent keyboard and mouse overlay for Windows game recordings, speedruns, and tutorials. It displays live key presses and mouse clicks without recording video or audio.
