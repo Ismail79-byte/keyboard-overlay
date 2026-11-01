@@ -96,6 +96,10 @@ namespace KeyboardOverlay
         private readonly Color ink = Color.FromArgb(0, 0, 0);
         private readonly Color transparent = Color.FromArgb(255, 0, 255);
         private readonly HashSet<int> held = new HashSet<int>();
+        private readonly Font[] keyFonts = new Font[] {
+            new Font("Segoe UI", 7F), new Font("Segoe UI", 8F), new Font("Segoe UI", 9F),
+            new Font("Segoe UI", 12F), new Font("Segoe UI", 15F)
+        };
         private readonly Timer wheelRelease = new Timer();
         private readonly NotifyIcon tray = new NotifyIcon();
         private readonly ContextMenuStrip trayMenu = new ContextMenuStrip();
@@ -166,7 +170,7 @@ namespace KeyboardOverlay
             TransparencyKey = transparent;
 
             wheelRelease.Interval = 180;
-            wheelRelease.Tick += delegate { wheelRelease.Stop(); wheelDirection = 0; Invalidate(); };
+            wheelRelease.Tick += delegate { wheelRelease.Stop(); wheelDirection = 0; if (Visible && preferences.ShowMouse) Invalidate(); };
 
             ToolStripMenuItem showHide = new ToolStripMenuItem("Hide / show overlay");
             showHide.Click += delegate { Visible = !Visible; };
@@ -205,6 +209,7 @@ namespace KeyboardOverlay
                 if (keyboardHook != IntPtr.Zero) UnhookWindowsHookEx(keyboardHook);
                 if (mouseHook != IntPtr.Zero) UnhookWindowsHookEx(mouseHook);
                 wheelRelease.Dispose();
+                foreach (Font font in keyFonts) font.Dispose();
                 tray.Visible = false;
                 tray.Dispose();
                 trayMenu.Dispose();
@@ -262,12 +267,16 @@ namespace KeyboardOverlay
                     bool freshPress = held.Add(vk);
                     if (freshPress)
                     {
-                        if (vk == VK_F11 && CtrlDown() && ShiftDown()) Visible = !Visible;
+                        if (vk == VK_F11 && CtrlDown() && ShiftDown())
+                        {
+                            Visible = !Visible;
+                            if (Visible) Invalidate();
+                        }
                         else if (vk == VK_F12 && CtrlDown() && ShiftDown()) BeginInvoke(new MethodInvoker(delegate { Close(); }));
-                        Invalidate();
+                        else if (Visible && IsDisplayedKey(vk)) Invalidate();
                     }
                 }
-                else if ((message == WM_KEYUP || message == WM_SYSKEYUP) && held.Remove(vk)) Invalidate();
+                else if ((message == WM_KEYUP || message == WM_SYSKEYUP) && held.Remove(vk) && Visible && IsDisplayedKey(vk)) Invalidate();
             }
             return CallNextHookEx(keyboardHook, code, wParam, lParam);
         }
@@ -298,14 +307,17 @@ namespace KeyboardOverlay
                 if (mouseCode != 0)
                 {
                     bool changed = pressed ? held.Add(mouseCode) : held.Remove(mouseCode);
-                    if (changed) Invalidate();
+                    if (changed && Visible && preferences.ShowMouse) Invalidate();
                 }
                 else if (message == WM_MOUSEWHEEL)
                 {
-                    wheelDirection = unchecked((short)(data.mouseData >> 16)) >= 0 ? 1 : -1;
-                    wheelRelease.Stop();
-                    wheelRelease.Start();
-                    Invalidate();
+                    if (Visible && preferences.ShowMouse)
+                    {
+                        wheelDirection = unchecked((short)(data.mouseData >> 16)) >= 0 ? 1 : -1;
+                        wheelRelease.Stop();
+                        wheelRelease.Start();
+                        Invalidate();
+                    }
                 }
             }
             return CallNextHookEx(mouseHook, code, wParam, lParam);
@@ -314,6 +326,28 @@ namespace KeyboardOverlay
         private bool CtrlDown() { return held.Contains(VK_CONTROL) || held.Contains(VK_LCONTROL) || held.Contains(VK_RCONTROL); }
         private bool ShiftDown() { return held.Contains(VK_SHIFT) || held.Contains(VK_LSHIFT) || held.Contains(VK_RSHIFT); }
         private bool IsDown(Keys key) { return held.Contains((int)key); }
+
+        private bool IsDisplayedKey(int vk)
+        {
+            string id = null;
+            if (vk == VK_SHIFT || vk == VK_LSHIFT || vk == VK_RSHIFT) id = "shift";
+            else if (vk == VK_CONTROL || vk == VK_LCONTROL || vk == VK_RCONTROL) id = "ctrl";
+            else if (vk >= (int)Keys.D1 && vk <= (int)Keys.D5) id = ((char)vk).ToString();
+            else if (vk == (int)Keys.Escape) id = "esc";
+            else if (vk == (int)Keys.Tab) id = "tab";
+            else if (vk == (int)Keys.CapsLock) id = "caps";
+            else if (vk == (int)Keys.Oemtilde) id = "grave";
+            else if (vk == (int)Keys.Space) id = "space";
+            else if (vk == (int)Keys.Up) id = "up";
+            else if (vk == (int)Keys.Down) id = "down";
+            else if (vk == (int)Keys.Left) id = "left";
+            else if (vk == (int)Keys.Right) id = "right";
+            else if (vk == (int)Keys.Q || vk == (int)Keys.W || vk == (int)Keys.E || vk == (int)Keys.R || vk == (int)Keys.T ||
+                     vk == (int)Keys.A || vk == (int)Keys.S || vk == (int)Keys.D || vk == (int)Keys.F || vk == (int)Keys.G ||
+                     vk == (int)Keys.Z || vk == (int)Keys.X || vk == (int)Keys.C || vk == (int)Keys.V || vk == (int)Keys.B)
+                id = ((char)vk).ToString().ToLowerInvariant();
+            return id != null && preferences.VisibleKeys.Contains(id);
+        }
 
         protected override void OnPaint(PaintEventArgs e)
         {
@@ -399,11 +433,21 @@ namespace KeyboardOverlay
                 using (SolidBrush b = new SolidBrush(pressedColor)) using (GraphicsPath path = RoundRect(new Rectangle(x + 1, y + 1, width - 2, height - 2), 3)) g.FillPath(b, path);
             }
             Color fg = pressed ? TextOn(pressedColor) : outlineColor;
-            using (Font f = new Font("Segoe UI", fontSize, FontStyle.Regular)) using (SolidBrush b = new SolidBrush(fg))
+            using (SolidBrush b = new SolidBrush(fg))
             {
+                Font f = KeyFont(fontSize);
                 SizeF size = g.MeasureString(label, f);
                 g.DrawString(label, f, b, x + (width - size.Width) / 2F, y + (height - size.Height) / 2F - 1F);
             }
+        }
+
+        private Font KeyFont(float size)
+        {
+            if (size <= 7F) return keyFonts[0];
+            if (size <= 8F) return keyFonts[1];
+            if (size <= 9F) return keyFonts[2];
+            if (size <= 12F) return keyFonts[3];
+            return keyFonts[4];
         }
 
         private void DrawMouse(Graphics g)
@@ -444,7 +488,7 @@ namespace KeyboardOverlay
 
         private void DrawHookError(Graphics g)
         {
-            using (Font f = new Font("Segoe UI", 7F)) using (SolidBrush b = new SolidBrush(outlineColor)) g.DrawString("INPUT HOOK FAILED", f, b, 10, 164);
+            using (SolidBrush b = new SolidBrush(outlineColor)) g.DrawString("INPUT HOOK FAILED", keyFonts[0], b, 10, 164);
         }
 
         private Color TextOn(Color background)
